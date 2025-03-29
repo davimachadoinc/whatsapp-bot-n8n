@@ -10,6 +10,7 @@ const express = require("express");
 const {
   default: makeWASocket,
   useMultiFileAuthState,
+  DisconnectReason,
 } = require("baileys");
 
 const app = express();
@@ -36,13 +37,11 @@ async function prepareAuthFolder() {
   if (result.rows.length > 0) {
     const authData = result.rows[0].data;
 
-    // Cria pasta temporária no container
     const authPath = "/tmp/auth";
     if (!fs.existsSync(authPath)) {
       fs.mkdirSync(authPath);
     }
 
-    // Escreve cada arquivo de volta no /tmp/auth/
     for (const file in authData) {
       const fullPath = path.join(authPath, file);
       fs.writeFileSync(fullPath, JSON.stringify(authData[file]));
@@ -65,8 +64,7 @@ async function startBot() {
     printQRInTerminal: false,
   });
 
-  // Mostra o QR Code visual
-  sock.ev.on("connection.update", async ({ qr, connection }) => {
+  sock.ev.on("connection.update", async ({ connection, qr, lastDisconnect }) => {
     if (qr) {
       const qrImg = await QRCode.toDataURL(qr);
       console.log("📱 ESCANEIE ESSE QR CODE NO WHATSAPP:");
@@ -76,9 +74,14 @@ async function startBot() {
     if (connection === "open") {
       console.log("🤖 Bot conectado ao WhatsApp!");
     }
+
+    if (connection === "close") {
+      const code = lastDisconnect?.error?.output?.statusCode;
+      console.warn(`⚠️ Conexão encerrada (código: ${code || "desconhecido"}). Tentando reconectar...`);
+      startBot(); // 🚀 Tenta reconectar
+    }
   });
 
-  // Salva a sessão no banco ao atualizar
   sock.ev.on("creds.update", async () => {
     const authPath = "/tmp/auth";
     const files = fs.readdirSync(authPath);
@@ -95,7 +98,6 @@ async function startBot() {
     console.log("💾 Sessão atualizada no banco Neon.");
   });
 
-  // Recebe mensagens e envia pro n8n
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
     if (!msg.message || msg.key.fromMe) return;
