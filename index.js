@@ -1,3 +1,6 @@
+const crypto = require("crypto");
+global.crypto = crypto;
+
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeInMemoryStore } = require("baileys");
 const axios = require("axios");
 const express = require("express");
