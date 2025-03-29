@@ -19,7 +19,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 
-// 🔌 Conexão com o banco Neon
+// 🔌 Conexão única com o banco Neon (fora da função)
 const pg = new Client({
   host: process.env.PGHOST,
   port: process.env.PGPORT,
@@ -29,9 +29,13 @@ const pg = new Client({
   ssl: { rejectUnauthorized: false },
 });
 
-async function prepareAuthFolder() {
-  await pg.connect();
+// Conecta logo no início
+pg.connect().then(() => {
+  console.log("📦 Conectado ao banco Neon");
+  startBot(); // só inicia o bot depois que o banco estiver ok
+});
 
+async function prepareAuthFolder() {
   const result = await pg.query("SELECT data FROM whatsapp_auth ORDER BY id DESC LIMIT 1");
 
   if (result.rows.length > 0) {
@@ -78,7 +82,7 @@ async function startBot() {
     if (connection === "close") {
       const code = lastDisconnect?.error?.output?.statusCode;
       console.warn(`⚠️ Conexão encerrada (código: ${code || "desconhecido"}). Tentando reconectar...`);
-      startBot(); // 🚀 Tenta reconectar
+      startBot(); // 🛠 reconecta bot (sem reconectar o banco!)
     }
   });
 
@@ -121,8 +125,6 @@ async function startBot() {
     }
   });
 }
-
-startBot();
 
 app.get("/", (_, res) => {
   res.send("🤖 Bot WhatsApp conectado com Neon!");
